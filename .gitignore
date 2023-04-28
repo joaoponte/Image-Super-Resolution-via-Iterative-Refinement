@@ -130,3 +130,9 @@ dmypy.json
 .pyre/
 
 *.lmdb
+
+# folders with loads of files
+checkpoint/
+config/
+results/
+tb_logger/
