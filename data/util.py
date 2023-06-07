@@ -14,7 +14,6 @@ IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG',
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
-
 def get_paths_from_images(path):
     assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
     images = []
@@ -25,7 +24,6 @@ def get_paths_from_images(path):
                 images.append(img_path)
     assert images, '{:s} has no valid image file'.format(path)
     return sorted(images)
-
 
 def augment(img_list, hflip=True, rot=True, split='val'):
     # horizontal flip OR rotate
@@ -44,7 +42,6 @@ def augment(img_list, hflip=True, rot=True, split='val'):
 
     return [_augment(img) for img in img_list]
 
-
 def transform2numpy(img):
     img = np.array(img)
     img = img.astype(np.float32) / img.max()
@@ -55,7 +52,7 @@ def transform2numpy(img):
         img = img[:, :, :3]
     return img
 
-def transform2PIL(img, rgb=False, value_range=None, min_max=(0, 1)):
+def transform2PIL(img, rgb=False, value_range=None, min_max=(0, 1), max_value=255., dtype=np.uint8):
     """
     from numpy array to PIL
     """
@@ -72,15 +69,28 @@ def transform2PIL(img, rgb=False, value_range=None, min_max=(0, 1)):
     #     mode = 'F'
 
     if value_range:
-        img = 255*((img-value_range[0])/(value_range[1] - value_range[0]))
+        img = max_value*((img-value_range[0])/(value_range[1] - value_range[0]))
     else:
-        img = 255*((img-img.min())/(img.max() - img.min()))
-    img = img.astype(np.uint8)
+        img = max_value*((img-img.min())/(img.max() - img.min()))
+    img = img.astype(dtype)
 
     if rgb:
         img = Image.fromarray(img, mode='L').convert('RGB')
     else:
         img = Image.fromarray(img, mode='L')
+
+    return img
+
+def transform_3d(img, value_range=None):
+    # print(f'util.py > transform_3d > antes -> {minmax(img)=}, {value_range=}')
+    if value_range:
+        img = 2*(img-value_range[0])/(value_range[1] - value_range[0])-1
+    else:
+        img = 2*(img-img.min())/(img.max() - img.min())-1
+    # print(f'util.py > transform_3d > depois 1 -> {minmax(img)=}, {value_range=}')
+
+    # img = img.astype(dtype)
+    # print(f'util.py > transform_3d > depois 2 -> {minmax(img)=}, {value_range=}')
 
     return img
 
@@ -102,9 +112,13 @@ def transform2tensor(img, min_max=(0, 1)):
 
 
 # implementation by torchvision, detail in https://github.com/Janspiry/Image-Super-Resolution-via-Iterative-Refinement/issues/14
-totensor = torchvision.transforms.ToTensor()
+# totensor = torchvision.transforms.ToTensor()
+totensor = lambda x: torch.from_numpy(x)
+
 # hflip = torchvision.transforms.RandomHorizontalFlip()
 hflip = torchvision.transforms.functional.hflip
+vflip = torchvision.transforms.functional.vflip
+
 def transform_augment_bkp(img_list, split='val', min_max=(0, 1)):    
     imgs = [totensor(img) for img in img_list]
     if split == 'train':
@@ -122,3 +136,23 @@ def transform_augment(img_list, img_value_ranges, split='val', min_max=(0, 1)):
     # ret_img = [((img-vr[0])/(vr[1]-vr[0])) * (min_max[1] - min_max[0]) + min_max[0] for img, vr in zip(imgs, img_value_ranges)]
     ret_img = [(img) * (min_max[1] - min_max[0]) + min_max[0] for img, vr in zip(imgs, img_value_ranges)]
     return ret_img
+
+
+def transform_augment_3d(img_list, img_value_ranges, split='val', min_max=(-1, 1)):
+    # get image shape
+    image_shape = img_list[0].shape
+
+    imgs = [totensor(img) for img in img_list]
+    if split == 'train' and random.random() < 0.5:
+        imgs = [hflip(img) for img in imgs]
+    if split == 'train' and random.random() < 0.5:
+        imgs = [vflip(img) for img in imgs]
+
+    # print(f'util.py > transform_augment_3d > antes -> {minmax(imgs[0])=}')
+    # ret_img = [(img-vr[0])/(vr[1]-vr[0]) for img, vr in zip(imgs, img_value_ranges)]
+    # ret_img = [(torch.reshape(img, (1, *image_shape))) * (min_max[1] - min_max[0]) + min_max[0] for img in imgs]
+    # print(f'util.py > transform_augment_3d > antes -> {minmax(ret_img[0])=}')
+    return imgs
+
+def minmax(arr):
+    return f'{arr.min()}, {arr.max()}'

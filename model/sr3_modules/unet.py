@@ -43,10 +43,10 @@ class FeatureWiseAffine(nn.Module):
         batch = x.shape[0]
         if self.use_affine_level:
             gamma, beta = self.noise_func(noise_embed).view(
-                batch, -1, 1, 1).chunk(2, dim=1)
+                batch, -1, 1, 1, 1, 1).chunk(2, dim=1)
             x = (1 + gamma) * x + beta
         else:
-            x = x + self.noise_func(noise_embed).view(batch, -1, 1, 1)
+            x = x + self.noise_func(noise_embed).view(batch, -1, 1, 1, 1)
         return x
 
 
@@ -59,7 +59,7 @@ class Upsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="nearest")
-        self.conv = nn.Conv2d(dim, dim, 3, padding=1)
+        self.conv = nn.Conv3d(dim, dim, 3, padding=1)
 
     def forward(self, x):
         return self.conv(self.up(x))
@@ -68,7 +68,7 @@ class Upsample(nn.Module):
 class Downsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.conv = nn.Conv2d(dim, dim, 3, 2, 1)
+        self.conv = nn.Conv3d(dim, dim, 3, 2, 1)
 
     def forward(self, x):
         return self.conv(x)
@@ -84,7 +84,7 @@ class Block(nn.Module):
             nn.GroupNorm(groups, dim),
             Swish(),
             nn.Dropout(dropout) if dropout != 0 else nn.Identity(),
-            nn.Conv2d(dim, dim_out, 3, padding=1)
+            nn.Conv3d(dim, dim_out, 3, padding=1)
         )
 
     def forward(self, x):
@@ -99,11 +99,11 @@ class ResnetBlock(nn.Module):
 
         self.block1 = Block(dim, dim_out, groups=norm_groups)
         self.block2 = Block(dim_out, dim_out, groups=norm_groups, dropout=dropout)
-        self.res_conv = nn.Conv2d(
+        self.res_conv = nn.Conv3d(
             dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb):
-        b, c, h, w = x.shape
+        b, c, d, h, w = x.shape
         h = self.block1(x)
         h = self.noise_func(h, time_emb)
         h = self.block2(h)
@@ -117,27 +117,27 @@ class SelfAttention(nn.Module):
         self.n_head = n_head
 
         self.norm = nn.GroupNorm(norm_groups, in_channel)
-        self.qkv = nn.Conv2d(in_channel, in_channel * 3, 1, bias=False)
-        self.out = nn.Conv2d(in_channel, in_channel, 1)
+        self.qkv = nn.Conv3d(in_channel, in_channel * 3, 1, bias=False)
+        self.out = nn.Conv3d(in_channel, in_channel, 1)
 
     def forward(self, input):
-        batch, channel, height, width = input.shape
+        batch, channel, depth, height, width = input.shape
         n_head = self.n_head
         head_dim = channel // n_head
 
         norm = self.norm(input)
-        qkv = self.qkv(norm).view(batch, n_head, head_dim * 3, height, width)
+        qkv = self.qkv(norm).view(batch, n_head, head_dim * 3, depth, height, width)
         query, key, value = qkv.chunk(3, dim=2)  # bhdyx
 
         attn = torch.einsum(
-            "bnchw, bncyx -> bnhwyx", query, key
+            "bncdhw, bncdyx -> bndhwyx", query, key
         ).contiguous() / math.sqrt(channel)
-        attn = attn.view(batch, n_head, height, width, -1)
+        attn = attn.view(batch, n_head, depth, height, width, -1)
         attn = torch.softmax(attn, -1)
-        attn = attn.view(batch, n_head, height, width, height, width)
+        attn = attn.view(batch, n_head, depth, height, width, height, width)
 
-        out = torch.einsum("bnhwyx, bncyx -> bnchw", attn, value).contiguous()
-        out = self.out(out.view(batch, channel, height, width))
+        out = torch.einsum("bndhwyx, bncdyx -> bncdhw", attn, value).contiguous()
+        out = self.out(out.view(batch, channel, depth, height, width))
 
         return out + input
 
@@ -173,7 +173,6 @@ class UNet(nn.Module):
         image_size=128
     ):
         super().__init__()
-
         if with_noise_level_emb:
             noise_level_channel = inner_channel
             self.noise_level_mlp = nn.Sequential(
@@ -190,8 +189,11 @@ class UNet(nn.Module):
         pre_channel = inner_channel
         feat_channels = [pre_channel]
         now_res = image_size
-        downs = [nn.Conv2d(in_channel, inner_channel,
+        downs = [nn.Conv3d(in_channel, inner_channel,
                            kernel_size=3, padding=1)]
+        
+        # print(f'unet.py > __init__ -> {num_mults=}, {pre_channel=}, {feat_channels=}, {feat_channels=}, {now_res=}')
+        # print(f'unet.py > __init__ -> {in_channel=}, {inner_channel=}')
         for ind in range(num_mults):
             is_last = (ind == num_mults - 1)
             use_attn = (now_res in attn_res)
@@ -235,6 +237,8 @@ class UNet(nn.Module):
     def forward(self, x, time):
         t = self.noise_level_mlp(time) if exists(
             self.noise_level_mlp) else None
+        
+        # print(f'{x.shape=}, {time=}')
 
         feats = []
         for layer in self.downs:

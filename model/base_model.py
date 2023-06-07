@@ -26,17 +26,17 @@ class BaseModel():
     def print_network(self):
         pass
 
-    def set_device(self, x):
+    def set_device(self, x, dtype=torch.float):
         if isinstance(x, dict):
             for key, item in x.items():
                 if item is not None:
-                    x[key] = item.to(self.device)
+                    x[key] = item.to(self.device, dtype=dtype)
         elif isinstance(x, list):
             for item in x:
                 if item is not None:
-                    item = item.to(self.device)
+                    item = item.to(self.device, dtype=dtype)
         else:
-            x = x.to(self.device)
+            x = x.to(self.device, dtype=dtype)
         return x
 
     def get_network_description(self, network):

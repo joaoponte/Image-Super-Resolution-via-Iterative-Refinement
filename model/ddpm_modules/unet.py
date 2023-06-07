@@ -43,7 +43,7 @@ class Upsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="nearest")
-        self.conv = nn.Conv2d(dim, dim, 3, padding=1)
+        self.conv = nn.Conv3d(dim, dim, 3, padding=1)
 
     def forward(self, x):
         return self.conv(self.up(x))
@@ -52,7 +52,7 @@ class Upsample(nn.Module):
 class Downsample(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.conv = nn.Conv2d(dim, dim, 3, 2, 1)
+        self.conv = nn.Conv3d(dim, dim, 3, 2, 1)
 
     def forward(self, x):
         return self.conv(x)
@@ -68,7 +68,7 @@ class Block(nn.Module):
             nn.GroupNorm(groups, dim),
             Swish(),
             nn.Dropout(dropout) if dropout != 0 else nn.Identity(),
-            nn.Conv2d(dim, dim_out, 3, padding=1)
+            nn.Conv3d(dim, dim_out, 3, padding=1)
         )
 
     def forward(self, x):
@@ -85,7 +85,7 @@ class ResnetBlock(nn.Module):
 
         self.block1 = Block(dim, dim_out, groups=norm_groups)
         self.block2 = Block(dim_out, dim_out, groups=norm_groups, dropout=dropout)
-        self.res_conv = nn.Conv2d(
+        self.res_conv = nn.Conv3d(
             dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
     def forward(self, x, time_emb):
@@ -103,8 +103,8 @@ class SelfAttention(nn.Module):
         self.n_head = n_head
 
         self.norm = nn.GroupNorm(norm_groups, in_channel)
-        self.qkv = nn.Conv2d(in_channel, in_channel * 3, 1, bias=False)
-        self.out = nn.Conv2d(in_channel, in_channel, 1)
+        self.qkv = nn.Conv3d(in_channel, in_channel * 3, 1, bias=False)
+        self.out = nn.Conv3d(in_channel, in_channel, 1)
 
     def forward(self, input):
         batch, channel, height, width = input.shape
@@ -176,7 +176,7 @@ class UNet(nn.Module):
         pre_channel = inner_channel
         feat_channels = [pre_channel]
         now_res = image_size
-        downs = [nn.Conv2d(in_channel, inner_channel,
+        downs = [nn.Conv3d(in_channel, inner_channel,
                            kernel_size=3, padding=1)]
         for ind in range(num_mults):
             is_last = (ind == num_mults - 1)

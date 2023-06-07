@@ -8,6 +8,8 @@ import model.networks as networks
 from .base_model import BaseModel
 logger = logging.getLogger('base')
 
+# import matplotlib.pyplot as plt
+
 
 class DDPM(BaseModel):
     def __init__(self, opt):
@@ -43,14 +45,16 @@ class DDPM(BaseModel):
         self.print_network()
 
     def feed_data(self, data):
+        # print(f'model.py -> {data["HR"].shape=}')
         self.data = self.set_device(data)
 
     def optimize_parameters(self):
         self.optG.zero_grad()
+        # print(f'model.py > optimize_parameters -> {self.data["HR"].shape=}')
         l_pix = self.netG(self.data)
         # need to average in multi-gpu
-        b, c, h, w = self.data['HR'].shape
-        l_pix = l_pix.sum()/int(b*c*h*w)
+        b, c, d, h, w = self.data['HR'].shape
+        l_pix = l_pix.sum()/int(b*c*d*h*w)
         l_pix.backward()
         self.optG.step()
 
@@ -66,7 +70,10 @@ class DDPM(BaseModel):
             else:
                 self.SR = self.netG.super_resolution(
                     self.data['SR'], continous)
+        # print(f'model.py > test -> {self.SR.shape=}')
         self.netG.train()
+        # print(f'model.py > test -> {self.SR.shape=}')
+
 
     def sample(self, batch_size=1, continous=False):
         self.netG.eval()
@@ -95,7 +102,7 @@ class DDPM(BaseModel):
     def get_current_log(self):
         return self.log_dict
 
-    def get_current_visuals(self, need_LR=True, sample=False):
+    def get_current_visuals(self, need_LR=True, sample=False, debug=False):
         out_dict = OrderedDict()
         if sample:
             out_dict['SAM'] = self.SR.detach().float().cpu()
@@ -107,6 +114,13 @@ class DDPM(BaseModel):
                 out_dict['LR'] = self.data['LR'].detach().float().cpu()
             else:
                 out_dict['LR'] = out_dict['INF']
+                
+        if debug:
+            print(f"model.py > get_current_visuals -> {out_dict['SR'].shape=}, {out_dict['SR'].min()=}, {out_dict['SR'].max()=}")
+            print(f"model.py > get_current_visuals -> {out_dict['INF'].shape=}, {out_dict['INF'].min()=}, {out_dict['INF'].max()=}")
+            print(f"model.py > get_current_visuals -> {out_dict['HR'].shape=}, {out_dict['HR'].min()=}, {out_dict['HR'].max()=}")
+            print(f"model.py > get_current_visuals -> {out_dict['LR'].shape=}, {out_dict['LR'].min()=}, {out_dict['LR'].max()=}")
+        
         return out_dict
 
     def print_network(self):

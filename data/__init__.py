@@ -59,3 +59,27 @@ def create_datasetJIT(dataset_opt, phase):
     logger.info('Dataset [{:s} - {:s}] is created.'.format(dataset.__class__.__name__,
                                                            dataset_opt['name']))
     return dataset
+
+def create_datasetJIT3D(dataset_opt, phase):
+    '''create dataset'''
+    mode = dataset_opt['mode']
+    from data.LRHR_dataset import LRHRDatasetJIT3D as D
+    dataset = D(data_lr=dataset_opt['data_lr'],
+                data_hr=dataset_opt['data_hr'],
+                coordinates_lr=dataset_opt['coordinates_lr'],
+                value_range_lr=dataset_opt['value_range_lr'],
+                value_range_hr=dataset_opt['value_range_hr'],
+                datatype=dataset_opt['datatype'],
+                l_resolution=dataset_opt['l_resolution'],
+                r_resolution=dataset_opt['r_resolution'],
+                split=phase,
+                data_len=dataset_opt['data_len'],
+                max_value=dataset_opt['max_value'],
+                dtype=dataset_opt['internal_dtype']
+                # need_LR=(mode == 'LRHR'),
+                # rgb=dataset_opt['rgb']
+                )
+    logger = logging.getLogger('base')
+    logger.info('Dataset [{:s} - {:s}] is created.'.format(dataset.__class__.__name__,
+                                                           dataset_opt['name']))
+    return dataset

@@ -4,6 +4,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 import random
 import data.util as Util
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -111,7 +112,6 @@ class LRHRDatasetJIT(Dataset):
         self.split = split
         self.coords = coordinates_lr
         self.rgb = rgb
-        print('rgb', self.rgb)
         
 
         if datatype=='numpy':
@@ -169,3 +169,68 @@ class LRHRDatasetJIT(Dataset):
                 min_max=(-1, 1)
             )
             return {'HR': img_HR, 'SR': img_SR, 'Index': index, 'Coords': self.coords[index]}
+        
+class LRHRDatasetJIT3D(Dataset):
+    def __init__(self, data_lr, data_hr, coordinates_lr, value_range_lr, value_range_hr, datatype, dtype, l_resolution=16, r_resolution=128, max_value=255, split='train', data_len=-1):
+        self.datatype = datatype
+        self.l_resolution = l_resolution
+        self.value_range_lr = value_range_lr
+        self.r_resolution = r_resolution
+        self.value_range_hr = value_range_hr
+        self.data_len = data_len
+        self.need_LR = True
+        self.split = split
+        self.coords = coordinates_lr
+        self.dtype = dtype
+        self.max_value = max_value
+
+        if datatype=='numpy':
+            self.dataset_len = data_lr.shape[0]
+
+            self.data_lr = data_lr
+            self.data_hr = data_hr
+            # print(f'LRHR_dataset.py > __init__ -> {data_lr.shape=}, {data_hr.shape=}')
+
+            if self.data_len <= 0:
+                self.data_len = self.dataset_len
+            else:
+                self.data_len = min(self.data_len, self.dataset_len)
+        else:
+            raise NotImplementedError(
+                'data_type [{:s}] is not recognized.'.format(datatype))
+
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, index):
+        img_HR = None
+        img_LR = None
+
+        if self.datatype == 'numpy':
+            # print('img original HR', self.data_hr[index].min(), self.data_hr[index].max(), self.value_range_hr)
+            img_HR = Util.transform_3d(self.data_hr[index], value_range=self.value_range_hr) #, max_value=self.max_value, dtype=self.dtype)
+            # print('img PIL HR', *img_HR.getextrema(), self.value_range_hr)
+
+            # print('img original LR', self.data_lr[index].min(), self.data_lr[index].max(), self.value_range_lr)
+            img_SR = Util.transform_3d(self.data_lr[index], value_range=self.value_range_lr) #, max_value=self.max_value, dtype=self.dtype)
+            # print('img PIL HR', *img_SR.getextrema(), self.value_range_lr)
+
+            img_LR = Util.transform_3d(self.data_lr[index], value_range=self.value_range_lr) #, max_value=self.max_value, dtype=self.dtype)
+            # img_LR = img_LR.resize((self.l_resolution,self.l_resolution), resample=Image.BICUBIC)
+            # print('img PIL HR', *img_LR.getextrema(), self.value_range_lr)
+
+            # print(f'LRHR_dataset.py > __getitem__ > antes -> {minmax(img_HR)=}, {minmax(self.data_hr[index])=}, {minmax(img_SR)=}, {minmax(self.data_lr[index])=}, {minmax(img_LR)=}, {minmax(self.data_lr[index])=}, ')
+
+        # print(f'LRHR_dataset.py > __getitem__ > shapes antes -> {img_HR.shape=}, {self.data_hr[index].shape=}, {img_SR.shape=}, {self.data_lr[index].shape=}, {img_LR.shape=}, {self.data_lr[index].shape=}')
+        [img_LR, img_SR, img_HR] = Util.transform_augment_3d(
+            [img_LR, img_SR, img_HR], 
+            img_value_ranges=[self.value_range_lr, self.value_range_lr, self.value_range_hr], 
+            split=self.split, 
+            min_max=(-1, 1)
+        )
+        # print(f'LRHR_dataset.py > __getitem__ > depois -> {minmax(img_HR)=}, {minmax(self.data_hr[index])=}, {minmax(img_SR)=}, {minmax(self.data_lr[index])=}, {minmax(img_LR)=}, {minmax(self.data_lr[index])=}\n\n')
+        # print(f'LRHR_dataset.py > __getitem__ > shapes depois -> {img_HR.shape=}, {self.data_hr[index].shape=}, {img_SR.shape=}, {self.data_lr[index].shape=}, {img_LR.shape=}, {self.data_lr[index].shape=}\n\n')
+        return {'LR': img_LR, 'HR': img_HR, 'SR': img_SR, 'Index': index, 'Coords': self.coords[index]}
+
+def minmax(arr):
+    return f'{arr.min()}, {arr.max()}'

@@ -20,14 +20,14 @@ def weights_init_normal(m, std=0.02):
         init.normal_(m.weight.data, 0.0, std)
         if m.bias is not None:
             m.bias.data.zero_()
-    elif classname.find('BatchNorm2d') != -1:
+    elif classname.find('BatchNorm3d') != -1:
         init.normal_(m.weight.data, 1.0, std)  # BN also uses norm
         init.constant_(m.bias.data, 0.0)
 
 
 def weights_init_kaiming(m, scale=1):
     classname = m.__class__.__name__
-    if classname.find('Conv2d') != -1:
+    if classname.find('Conv3d') != -1:
         init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
         m.weight.data *= scale
         if m.bias is not None:
@@ -37,7 +37,7 @@ def weights_init_kaiming(m, scale=1):
         m.weight.data *= scale
         if m.bias is not None:
             m.bias.data.zero_()
-    elif classname.find('BatchNorm2d') != -1:
+    elif classname.find('BatchNorm3d') != -1:
         init.constant_(m.weight.data, 1.0)
         init.constant_(m.bias.data, 0.0)
 
@@ -52,7 +52,7 @@ def weights_init_orthogonal(m):
         init.orthogonal_(m.weight.data, gain=1)
         if m.bias is not None:
             m.bias.data.zero_()
-    elif classname.find('BatchNorm2d') != -1:
+    elif classname.find('BatchNorm3d') != -1:
         init.constant_(m.weight.data, 1.0)
         init.constant_(m.bias.data, 0.0)
 
@@ -88,6 +88,10 @@ def define_G(opt):
         from .sr3_modules import diffusion, unet
     if ('norm_groups' not in model_opt['unet']) or model_opt['unet']['norm_groups'] is None:
         model_opt['unet']['norm_groups']=32
+
+
+    print(model_opt['unet'])
+
     model = unet.UNet(
         in_channel=model_opt['unet']['in_channel'],
         out_channel=model_opt['unet']['out_channel'],
@@ -99,6 +103,8 @@ def define_G(opt):
         dropout=model_opt['unet']['dropout'],
         image_size=model_opt['diffusion']['image_size']
     )
+
+    print(model_opt['diffusion'])
     netG = diffusion.GaussianDiffusion(
         model,
         image_size=model_opt['diffusion']['image_size'],
